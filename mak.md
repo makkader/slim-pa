@@ -1,0 +1,1 @@
+PYTHONPATH=. python src/main.py

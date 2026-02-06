@@ -1,0 +1,21 @@
+[project]
+name = "slim-pa"
+version = "0.1.0"
+description = "A production-grade AI agent with Telegram integration"
+authors = [{ name = "Mak", email = "mak1186@gmail.com" }]
+dependencies = [
+    "pydantic-ai",
+    "aiogram",
+    "httpx",
+    "langchain-community",
+    "playwright",
+    "python-dotenv",
+    "pydantic-settings",
+    "ddgs",
+    "trafilatura",
+    "loguru",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
