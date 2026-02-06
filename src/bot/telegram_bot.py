@@ -2,24 +2,36 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
 from aiogram import F
 from src.config.config import settings
-from src.agent.ai_agent import agent
-from src.memory.memory import memory
-from loguru import logger
-from pydantic_ai.exceptions import UnexpectedModelBehavior
+from src.agent.rpc_client_full import CompleteRPCClient
+from src.bot.rpc_client_helper import send_prompt_and_get_response
 
+from loguru import logger
+
+# Initialize a single RPC client instance for the bot
+pi_client = CompleteRPCClient(
+        provider="lmstudio",#settings.PROVIDER,
+        #model=settings.MODEL,
+        no_session="true"
+    )
 
 dp = Dispatcher()
-
-
-@dp.message(Command("new"))
-async def command_new(message: types.Message) -> None:
-    memory.reset(message.chat.id)
-    await message.answer(f"Hello, Lets start new chat (id: {message.chat.id}). How can I help you today?")
 
 
 @dp.message(CommandStart())
 async def command_start_handler(message: types.Message) -> None:
     await message.answer(f"Hello, {message.from_user.full_name}! I am your AI agent. How can I help you today?")
+
+@dp.message(Command("new"))
+async def command_new(message: types.Message) -> None:
+    status = pi_client.new_session()
+    await message.answer(f"Hello, new session created: {status}. How can I help you today?")
+
+
+@dp.message(Command("stop"))
+async def command_stop(message: types.Message) -> None:
+    pi_client.close()
+    await message.answer(f"Goodbye, {message.from_user.full_name}! Your session has been stopped.")
+
 
 @dp.message()
 async def message_handler(message: types.Message) -> None:
@@ -29,22 +41,16 @@ async def message_handler(message: types.Message) -> None:
     chat_id = message.chat.id
     logger.info(f"Received message from {chat_id}: {message.text}")
 
-    # Get history from memory
-    history = memory.get_messages(chat_id)
-
     try:
-        # Run agent with history
-        result = await agent.run(message.text, message_history=history)
-        print("result",result.output)
-        
-        # Update memory with new messages
-        memory.add_messages(chat_id, result.new_messages())
-        
-        await message.answer(result.output)
-    except UnexpectedModelBehavior as e:
+        if pi_client.is_closed():
+            logger.warning("RPC client is closed. Reinitializing...")
+            pi_client.__init__(
+                provider="lmstudio",
+                no_session="true"
+            )
+        response = send_prompt_and_get_response(pi_client, message.text)
 
-        logger.exception("Error processing message, UnexpectedModelBehavior: %s", e)
-        await message.answer(f"Sorry, UnexpectedModelBehavior: {str(e)}")
+        await message.answer(response)
     except Exception as e:
         logger.exception("Error processing message")
         await message.answer(f"Sorry, I encountered an error: {str(e)}")
