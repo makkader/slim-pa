@@ -432,6 +432,7 @@ def main():
         
         def on_agent_end(event):
             print("\n\nAgent finished.")
+            print("At agent_end:messages:", event.get("messages"));
             print(f"Stop reason: {event.get('stopReason')}")
         
         def on_error(event):
