@@ -3,7 +3,5 @@ services:
     build: .
     env_file:
       - .env
-    volumes:
-      - ./src:/app/src
-      - ./pyproject.toml:/app/pyproject.toml
+    
     restart: unless-stopped

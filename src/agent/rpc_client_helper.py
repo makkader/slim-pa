@@ -2,6 +2,7 @@ import time
 
 def parse_assistant_response(messages):
     """Parse assistant response content from OpenAI format"""
+    total_text = []
     for message in messages:
         if message.get('role') == 'assistant':
             content_parts = message.get('content', [])
@@ -12,12 +13,13 @@ def parse_assistant_response(messages):
                 if part.get('type') == 'text':
                     text_content.append(part.get('text', ''))
                 # elif part.get('type') == 'toolCall':
-                #     tool_id = part.get('id')
                 #     tool_name = part.get('name')
                 #     tool_args = part.get('arguments', {})
 
             
-            return '\n'.join(text_content)
+            total_text.append('\n'.join(text_content))
+
+    return '\n'.join(total_text)
 
 def send_prompt_get_response(client, message: str, timeout: int = 120) -> str:
 
@@ -31,6 +33,7 @@ def send_prompt_get_response(client, message: str, timeout: int = 120) -> str:
         if event.get("type") == "agent_end":
             print("\n\nAgent finished.")
             print(f"Stop reason: {event.get('stopReason')}")
+            print(f"messages: {event.get('messages')}")
             return parse_assistant_response(event.get("messages", []))  
             
 
