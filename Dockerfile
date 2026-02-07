@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
 
 # Copy pyproject.toml and install dependencies
 COPY pyproject.toml .
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir -e .
 
 # Copy the source code
 COPY src/ ./src/

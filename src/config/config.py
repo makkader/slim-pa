@@ -5,8 +5,8 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str
     GOOGLE_API_KEY: Optional[str] = None
     
-    LLM_PROVIDER: str = "google-gla" # options: google-gla, openai, ollama
-    LLM_MODEL_NAME: str = "gemini-3.0-flash"
+    LLM_PROVIDER: str = "lmstudio" 
+    LLM_MODEL_NAME: str = "qwen/qwen3-coder-30b"
     LLM_BASE_URL: Optional[str] = None
     
     LOG_LEVEL: str = "INFO"

@@ -8,11 +8,14 @@ from src.agent.rpc_client_helper import send_prompt_get_response
 from loguru import logger
 
 # Initialize a single RPC client instance for the bot
-pi_client = CompleteRPCClient(
-        provider="lmstudio",#settings.PROVIDER,
-        #model=settings.MODEL,
+def create_rpc_client():
+    return CompleteRPCClient(
+        provider=settings.LLM_PROVIDER,
+        model=settings.LLM_MODEL_NAME,
         no_session="true"
     )
+pi_client = create_rpc_client()
+
 
 dp = Dispatcher()
 
@@ -45,10 +48,12 @@ async def message_handler(message: types.Message) -> None:
         if pi_client.is_closed():
             logger.warning("RPC client is closed. Reinitializing...")
             pi_client.__init__(
-                provider="lmstudio",
+                provider=settings.LLM_PROVIDER,
+                model=settings.LLM_MODEL_NAME,
                 no_session="true"
             )
-        #response = send_prompt_and_get_response(pi_client, message.text)
+
+        # send typing action while processing the message
         await message.bot.send_chat_action(
             chat_id=message.chat.id,
             action="typing"
