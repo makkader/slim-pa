@@ -24,6 +24,7 @@ RUN pip install --no-cache-dir .
 # Copy the source code
 COPY src/ ./src/
 COPY models.json /root/.pi/agent/models.json
+COPY AGENTS.md ./AGENTS.md
 
 # Set environment variables
 ENV PYTHONPATH=/app
