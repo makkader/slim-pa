@@ -4,3 +4,5 @@ node_modules/
 build/
 __pycache__/
 *.egg-info/
+hacking
+pi-coding-agent-src
