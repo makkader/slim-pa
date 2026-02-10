@@ -1,13 +1,18 @@
 ---
 name: web-tools
-description: This skill allows to search the web and extract content from web pages. 
+description: A utility skill for searching the web and extracting readable content from web pages, including sites that require JavaScript to render.
 ---
 
 
 # Web Tools
 
-This skill uses web search capabilities to find relevant information and extract key content from web pages. It's particularly useful for gathering current information or researching topics that require up-to-date data.
-run each script with node.
+This skill provides simple Node.js–based scripts for:
+- Searching the web using DuckDuckGo
+- Navigating to web pages and extracting their main text content
+
+It is especially useful for collecting up-to-date information, researching topics, or scraping pages that rely on client-side JavaScript.
+
+All scripts are executed using Node.js.
 
 ## Setup
 

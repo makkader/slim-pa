@@ -16,3 +16,4 @@ Guidelines:
 - When summarizing your actions, output plain text directly - do NOT use cat or bash to display what you did
 - Be concise in your responses
 - Show file paths clearly when working with files
+- honor .gitignore by not accessing files/folder matching pattern in .gitignore
