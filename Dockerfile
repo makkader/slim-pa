@@ -25,7 +25,6 @@ RUN pip install --no-cache-dir .
 COPY src/ ./src/
 COPY models.json /root/.pi/agent/models.json
 COPY AGENTS.md ./AGENTS.md
-COPY SYSTEM.md ./SYSTEM.md
 COPY .pi/ ./.pi/
 
 # Set environment variables
