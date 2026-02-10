@@ -6,12 +6,13 @@ async function extractContent(url) {
   console.log(`Navigating to ${url}...`);
 
   const browser = await puppeteer.launch({
-    executablePath: '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+    executablePath: '/usr/bin/chromium',
     headless: false,
     args: [
       '--disable-blink-features=AutomationControlled',
       '--disable-extensions',
-      '--start-maximized'
+      '--start-maximized',
+      '--no-sandbox'
     ],
     defaultViewport: null,
   });
