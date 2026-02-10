@@ -1,4 +1,3 @@
-
 ---
 name: web-tools
 description: This skill allows to search the web and extract content from web pages. 
