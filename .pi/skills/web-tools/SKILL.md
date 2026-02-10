@@ -27,7 +27,7 @@ npm install
 ## Web search
 
 ```bash
-{baseDir}/web-search.js <query> [--type \"web|image|video|news\"]
+node {baseDir}/web-search.js <query> [--type \"web|image|video|news\"]
 ```
 
 Search web using duckduckgo. 
@@ -35,7 +35,7 @@ Search web using duckduckgo.
 ## Extract Page Content
 
 ```bash
-{baseDir}/web-content.js <url>
+node {baseDir}/web-content.js <url>
 ```
 
 Navigate to a URL and extract content as text. Works on pages with JavaScript content (waits for page to load).
