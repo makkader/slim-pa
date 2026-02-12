@@ -1,4 +1,6 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Install Node.js
 RUN apt-get update && apt-get install -y \
@@ -23,15 +25,15 @@ RUN apt-get update && apt-get install -y \
 RUN npm install -g @mariozechner/pi-coding-agent
 
 # Copy pyproject.toml and install dependencies
-COPY pyproject.toml .
-RUN pip install --no-cache-dir .
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-cache
 
 # Copy the source code
 COPY src/ ./src/
 COPY models.json /root/.pi/agent/models.json
 COPY AGENTS.md ./AGENTS.md
 COPY .pi/ ./.pi/
-COPY .pi/ ./.pi/
+
 
 # Set environment variables
 ENV PYTHONPATH=/app
@@ -44,4 +46,4 @@ ENV DISPLAY=:99
 ENTRYPOINT ["/entrypoint.sh"]
 
 # Run the application
-CMD ["python", "src/main.py"]
+CMD ["uv", "run", "python", "src/main.py"]
