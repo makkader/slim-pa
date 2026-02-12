@@ -5,8 +5,15 @@ import puppeteer from 'puppeteer';
 async function extractContent(url) {
   console.log(`Navigating to ${url}...`);
 
+  let exePath = '/usr/bin/chromium'; // default for docker/linux
+
+  if (process.platform === 'darwin') {
+    exePath = '/opt/homebrew/bin/chromium';
+  }
+
+  console.log("exePath:", exePath);
   const browser = await puppeteer.launch({
-    executablePath: '/usr/bin/chromium',
+    executablePath: exePath,
     headless: false,
     args: [
       '--disable-blink-features=AutomationControlled',

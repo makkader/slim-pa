@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Complete RPC Client for pi-coding-agent
-Full-featured client with all RPC protocol capabilities including:
+Complete Async RPC Client for pi-coding-agent
+Full-featured async client with all RPC protocol capabilities including:
 - Prompting with images and streaming behavior
 - Session management
 - Model configuration
@@ -10,15 +10,16 @@ Full-featured client with all RPC protocol capabilities including:
 - Bash execution
 """
 
-import subprocess
+import asyncio
 import json
 import sys
 import base64
-from typing import Iterator, Dict, Any, Optional, List, Callable
+from typing import AsyncIterator, Dict, Any, Optional, List, Callable, Awaitable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from loguru import logger
+
+PROVIDER="lmstudio"
 
 class StreamingBehavior(Enum):
     """Streaming behavior for prompts during active streaming."""
@@ -41,17 +42,17 @@ class ImageContent:
 
 
 class CompleteRPCClient:
-    """Complete RPC client with full protocol support."""
+    """Complete async RPC client with full protocol support."""
     
     def __init__(
         self,
-        provider: str = "lmstudio",
+        provider: str = PROVIDER,
         model: Optional[str] = None,
         no_session: bool = False,
         session_dir: Optional[str] = None,
         additional_args: Optional[List[str]] = None
     ):
-        """Initialize the RPC client and start the agent process.
+        """Initialize the RPC client configuration.
         
         Args:
             provider: LLM provider (anthropic, openai, google, etc.)
@@ -60,74 +61,86 @@ class CompleteRPCClient:
             session_dir: Custom session storage directory
             additional_args: Additional command-line arguments
         """
-        cmd = ["pi", "--mode", "rpc", "--provider", provider]
+        self.cmd = ["pi", "--mode", "rpc", "--provider", provider]
         if model:
-            cmd.extend(["--model", model])
+            self.cmd.extend(["--model", model])
         if no_session:
-            cmd.append("--no-session")
+            self.cmd.append("--no-session")
         if session_dir:
-            cmd.extend(["--session-dir", session_dir])
+            self.cmd.extend(["--session-dir", session_dir])
         if additional_args:
-            cmd.extend(additional_args)
+            self.cmd.extend(additional_args)
         
-        self.proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1
+        self.proc: Optional[asyncio.subprocess.Process] = None
+        self._event_handlers: Dict[str, List[Callable[[Dict[str, Any]], Awaitable[None]]]] = {}
+        self._ui_response_handlers: Dict[str, Callable[[Dict[str, Any]], Awaitable[None]]] = {}
+        self._read_task: Optional[asyncio.Task] = None
+    
+    async def start(self) -> None:
+        """Start the agent process."""
+        self.proc = await asyncio.create_subprocess_exec(
+            *self.cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
         )
-        self._event_handlers: Dict[str, List[Callable]] = {}
-        self._ui_response_handlers: Dict[str, Callable] = {}
     
-    def send_command(self, command: Dict[str, Any]) -> None:
+    async def send_command(self, command: Dict[str, Any]) -> None:
         """Send a command to the agent."""
-        if not self.proc.stdin:
-            raise RuntimeError("Process stdin is not available")
+        if not self.proc or not self.proc.stdin:
+            raise RuntimeError("Process not started or stdin is not available")
         
-        self.proc.stdin.write(json.dumps(command) + "\n")
-        self.proc.stdin.flush()
+        data = json.dumps(command) + "\n"
+        self.proc.stdin.write(data.encode())
+        await self.proc.stdin.drain()
     
-    def read_events(self) -> Iterator[Dict[str, Any]]:
+    async def read_events(self) -> AsyncIterator[Dict[str, Any]]:
         """Read events from the agent stdout."""
-        if not self.proc.stdout:
-            raise RuntimeError("Process stdout is not available")
+        if not self.proc or not self.proc.stdout:
+            raise RuntimeError("Process not started or stdout is not available")
         
-        for line in self.proc.stdout:
-            line = line.strip()
-            if line:
+        while True:
+            line = await self.proc.stdout.readline()
+            if not line:
+                break
+            
+            line_str = line.decode().strip()
+            if line_str:
                 try:
-                    event = json.loads(line)
-                    self._dispatch_event(event)
+                    event = json.loads(line_str)
+                    await self._dispatch_event(event)
                     yield event
                 except json.JSONDecodeError as e:
                     print(f"Failed to parse event: {e}", file=sys.stderr)
     
-    def on(self, event_type: str, handler: Callable[[Dict[str, Any]], None]) -> None:
-        """Register an event handler.
+    def on(self, event_type: str, handler: Callable[[Dict[str, Any]], Awaitable[None]]) -> None:
+        """Register an async event handler.
         
         Args:
             event_type: Event type to listen for
-            handler: Callback function
+            handler: Async callback function
         """
         if event_type not in self._event_handlers:
             self._event_handlers[event_type] = []
         self._event_handlers[event_type].append(handler)
     
-    def _dispatch_event(self, event: Dict[str, Any]) -> None:
+    async def _dispatch_event(self, event: Dict[str, Any]) -> None:
         """Dispatch event to registered handlers."""
         event_type = event.get("type")
         if event_type in self._event_handlers:
+            tasks = []
             for handler in self._event_handlers[event_type]:
                 try:
-                    handler(event)
+                    tasks.append(handler(event))
                 except Exception as e:
-                    print(f"Error in event handler: {e}", file=sys.stderr)
+                    print(f"Error creating handler task: {e}", file=sys.stderr)
+            
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
     
     # ===== Prompting Commands =====
     
-    def prompt(
+    async def prompt(
         self,
         message: str,
         images: Optional[List[ImageContent]] = None,
@@ -149,9 +162,9 @@ class CompleteRPCClient:
             cmd["images"] = [img.to_dict() for img in images]
         if streaming_behavior:
             cmd["streamingBehavior"] = streaming_behavior.value
-        self.send_command(cmd)
+        await self.send_command(cmd)
     
-    def steer(
+    async def steer(
         self,
         message: str,
         images: Optional[List[ImageContent]] = None
@@ -165,9 +178,9 @@ class CompleteRPCClient:
         cmd: Dict[str, Any] = {"type": "steer", "message": message}
         if images:
             cmd["images"] = [img.to_dict() for img in images]
-        self.send_command(cmd)
+        await self.send_command(cmd)
     
-    def follow_up(
+    async def follow_up(
         self,
         message: str,
         images: Optional[List[ImageContent]] = None
@@ -181,96 +194,99 @@ class CompleteRPCClient:
         cmd: Dict[str, Any] = {"type": "follow_up", "message": message}
         if images:
             cmd["images"] = [img.to_dict() for img in images]
-        self.send_command(cmd)
+        await self.send_command(cmd)
     
     # ===== Control Commands =====
     
-    def abort(self) -> None:
+    async def abort(self) -> None:
         """Abort the current agent execution."""
-        self.send_command({"type": "abort"})
+        await self.send_command({"type": "abort"})
     
-    def reset(self) -> None:
+    async def reset(self) -> None:
         """Reset the agent session (clear all messages)."""
-        self.send_command({"type": "reset"})
+        await self.send_command({"type": "reset"})
     
     # ===== Session Commands =====
-    def _read_events(self):
-        for line in self.proc.stdout:
-            yield json.loads(line)
-
-    def new_session(self) -> bool:
-        """Create new session.
+    async def new_session(self) -> None:
+        """Create a new session.
         
         Args:
             name: Optional session name
         """
         cmd: Dict[str, Any] = {"type": "new_session"}
-        self.send_command(cmd)
-        for event in self._read_events():
-            logger.info(f"Received event: {event}")
-            return event.get('success', False)
-            
+        await self.send_command(cmd)
+
+    async def save_session(self, name: Optional[str] = None) -> None:
+        """Save the current session.
+        
+        Args:
+            name: Optional session name
+        """
+        cmd: Dict[str, Any] = {"type": "save_session"}
+        if name:
+            cmd["name"] = name
+        await self.send_command(cmd)
     
-    def load_session(self, name: str) -> None:
+    async def load_session(self, name: str) -> None:
         """Load a saved session.
         
         Args:
             name: Session name to load
         """
-        self.send_command({"type": "load_session", "name": name})
+        await self.send_command({"type": "load_session", "name": name})
     
-    def list_sessions(self) -> None:
+    async def list_sessions(self) -> None:
         """List all saved sessions."""
-        self.send_command({"type": "list_sessions"})
+        await self.send_command({"type": "list_sessions"})
     
-    def delete_session(self, name: str) -> None:
+    async def delete_session(self, name: str) -> None:
         """Delete a saved session.
         
         Args:
             name: Session name to delete
         """
-        self.send_command({"type": "delete_session", "name": name})
+        await self.send_command({"type": "delete_session", "name": name})
     
     # ===== Model Commands =====
     
-    def set_model(self, model_id: str) -> None:
+    async def set_model(self, model_id: str) -> None:
         """Set the active model.
         
         Args:
             model_id: Model ID to use
         """
-        self.send_command({"type": "set_model", "modelId": model_id})
+        await self.send_command({"type": "set_model", "modelId": model_id})
     
-    def get_model(self) -> None:
+    async def get_model(self) -> None:
         """Get the current model configuration."""
-        self.send_command({"type": "get_model"})
+        await self.send_command({"type": "get_model"})
     
-    def list_models(self) -> None:
+    async def list_models(self) -> None:
         """List all available models."""
-        self.send_command({"type": "list_models"})
+        await self.send_command({"type": "list_models"})
     
     # ===== Message Commands =====
     
-    def get_messages(self) -> None:
+    async def get_messages(self) -> None:
         """Get all messages in the current session."""
-        self.send_command({"type": "get_messages"})
+        await self.send_command({"type": "get_messages"})
     
-    def delete_message(self, message_id: str) -> None:
+    async def delete_message(self, message_id: str) -> None:
         """Delete a message from the session.
         
         Args:
             message_id: ID of the message to delete
         """
-        self.send_command({"type": "delete_message", "messageId": message_id})
+        await self.send_command({"type": "delete_message", "messageId": message_id})
     
-    def edit_message(self, message_id: str, new_content: str) -> None:
+    async def edit_message(self, message_id: str, new_content: str) -> None:
         """Edit a message in the session.
         
         Args:
             message_id: ID of the message to edit
             new_content: New message content
         """
-        self.send_command({
+        await self.send_command({
             "type": "edit_message",
             "messageId": message_id,
             "newContent": new_content
@@ -278,7 +294,7 @@ class CompleteRPCClient:
     
     # ===== Bash Commands =====
     
-    def bash(self, command: str, cwd: Optional[str] = None) -> None:
+    async def bash(self, command: str, cwd: Optional[str] = None) -> None:
         """Execute a bash command.
         
         Args:
@@ -288,41 +304,41 @@ class CompleteRPCClient:
         cmd: Dict[str, Any] = {"type": "bash", "command": command}
         if cwd:
             cmd["cwd"] = cwd
-        self.send_command(cmd)
+        await self.send_command(cmd)
     
-    def bash_interrupt(self) -> None:
+    async def bash_interrupt(self) -> None:
         """Interrupt the currently running bash command."""
-        self.send_command({"type": "bash_interrupt"})
+        await self.send_command({"type": "bash_interrupt"})
     
     # ===== Configuration Commands =====
     
-    def set_steering_mode(self, mode: str) -> None:
+    async def set_steering_mode(self, mode: str) -> None:
         """Set the steering mode.
         
         Args:
             mode: Steering mode ("interrupt" or "queue")
         """
-        self.send_command({"type": "set_steering_mode", "mode": mode})
+        await self.send_command({"type": "set_steering_mode", "mode": mode})
     
-    def get_steering_mode(self) -> None:
+    async def get_steering_mode(self) -> None:
         """Get the current steering mode."""
-        self.send_command({"type": "get_steering_mode"})
+        await self.send_command({"type": "get_steering_mode"})
     
-    def set_auto_approve(self, enabled: bool) -> None:
+    async def set_auto_approve(self, enabled: bool) -> None:
         """Enable or disable auto-approval of tool calls.
         
         Args:
             enabled: Whether to auto-approve
         """
-        self.send_command({"type": "set_auto_approve", "enabled": enabled})
+        await self.send_command({"type": "set_auto_approve", "enabled": enabled})
     
-    def get_auto_approve(self) -> None:
+    async def get_auto_approve(self) -> None:
         """Get the current auto-approve setting."""
-        self.send_command({"type": "get_auto_approve"})
+        await self.send_command({"type": "get_auto_approve"})
     
     # ===== Extension UI Protocol =====
     
-    def extension_ui_response(
+    async def extension_ui_response(
         self,
         request_id: str,
         value: Optional[Any] = None,
@@ -344,9 +360,9 @@ class CompleteRPCClient:
             cmd["value"] = value
         elif confirmed is not None:
             cmd["confirmed"] = confirmed
-        self.send_command(cmd)
+        await self.send_command(cmd)
     
-    def handle_ui_request(self, request: Dict[str, Any]) -> None:
+    async def handle_ui_request(self, request: Dict[str, Any]) -> None:
         """Handle an extension UI request (override in subclass or use callbacks).
         
         Args:
@@ -361,27 +377,27 @@ class CompleteRPCClient:
         
         if method in self._ui_response_handlers:
             try:
-                self._ui_response_handlers[method](request)
+                await self._ui_response_handlers[method](request)
             except Exception as e:
                 print(f"Error in UI handler: {e}", file=sys.stderr)
-                self.extension_ui_response(request_id, cancelled=True)
+                await self.extension_ui_response(request_id, cancelled=True)
         else:
             # Default: cancel all UI requests
-            self.extension_ui_response(request_id, cancelled=True)
+            await self.extension_ui_response(request_id, cancelled=True)
     
-    def register_ui_handler(self, method: str, handler: Callable[[Dict[str, Any]], None]) -> None:
-        """Register a handler for extension UI requests.
+    def register_ui_handler(self, method: str, handler: Callable[[Dict[str, Any]], Awaitable[None]]) -> None:
+        """Register an async handler for extension UI requests.
         
         Args:
             method: UI method name (select, confirm, input, editor)
-            handler: Callback function
+            handler: Async callback function
         """
         self._ui_response_handlers[method] = handler
     
     # ===== Utility Methods =====
     
     @staticmethod
-    def load_image(path: str) -> ImageContent:
+    async def load_image(path: str) -> ImageContent:
         """Load an image file and encode it as base64.
         
         Args:
@@ -399,43 +415,49 @@ class CompleteRPCClient:
             ".webp": "image/webp"
         }.get(file_path.suffix.lower(), "image/png")
         
-        with open(path, "rb") as f:
-            data = base64.b64encode(f.read()).decode("utf-8")
+        # Use asyncio to read file asynchronously
+        loop = asyncio.get_event_loop()
+        data = await loop.run_in_executor(
+            None,
+            lambda: base64.b64encode(open(path, "rb").read()).decode("utf-8")
+        )
         
         return ImageContent(data=data, mime_type=mime_type)
     
-    def close(self) -> None:
+    async def close(self) -> None:
         """Close the agent process."""
-        if self.proc.stdin:
+        if self.proc and self.proc.stdin:
             self.proc.stdin.close()
-        self.proc.wait()
+            await self.proc.stdin.wait_closed()
+        if self.proc:
+            await self.proc.wait()
 
-    def is_closed(self) -> bool:
+    async def is_closed(self) -> bool:
         """Check if the agent process has terminated."""
         return self.proc.poll() is not None
     
-    def __enter__(self):
+    async def __aenter__(self):
+        await self.start()
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
 
 
-def main():
-    """Example usage of the complete RPC client."""
-    with CompleteRPCClient(no_session=True) as client:
+async def main():
+    """Example usage of the complete async RPC client."""
+    async with CompleteRPCClient(model="qwen/qwen3-coder-30b",no_session=True) as client:
         # Register event handlers
-        def on_text_delta(event):
+        async def on_text_delta(event):
             assistant_event = event.get("assistantMessageEvent", {})
             if assistant_event.get("type") == "text_delta":
                 print(assistant_event["delta"], end="", flush=True)
         
-        def on_agent_end(event):
+        async def on_agent_end(event):
             print("\n\nAgent finished.")
-            print("At agent_end:messages:", event.get("messages"));
             print(f"Stop reason: {event.get('stopReason')}")
         
-        def on_error(event):
+        async def on_error(event):
             print(f"\nError: {event.get('error')}", file=sys.stderr)
         
         client.on("message_update", on_text_delta)
@@ -444,19 +466,19 @@ def main():
         
         # Get current model
         print("Getting current model...\n")
-        client.get_model()
+        await client.get_model()
         
         # Send a prompt
         print("Sending prompt...\n")
-        client.prompt("Hi, How can you help me?")
+        await client.prompt("What is your name? Please respond with a short answer.")
         
         # Process events
-        for event in client.read_events():
+        async for event in client.read_events():
             event_type = event.get("type")
             
-            # Handle extension UI requests
-            if event_type == "extension_ui_request":
-                client.handle_ui_request(event)
+            # # Handle extension UI requests
+            # if event_type == "extension_ui_request":
+            #     await client.handle_ui_request(event)
             
             # Stop on agent_end
             if event_type == "agent_end":
@@ -468,5 +490,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
 

@@ -3,7 +3,7 @@ from typing import Optional
 
 class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str
-    GOOGLE_API_KEY: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = None
     
     LLM_PROVIDER: str = "lmstudio" 
     LLM_MODEL_NAME: str = "qwen/qwen3-coder-30b"
