@@ -24,30 +24,11 @@ def parse_assistant_response(messages)-> str:
     return '\n'.join(total_text)
 
 async def send_prompt_get_response_async(client, message, timeout: int = 5*60) -> str:
-
+    #TODO: add timeout handling
     await client.send_command({"id":message.chat.id,"type": "prompt", "message": message.text})
     async for event in client.read_events():
         event_type = event.get("type")
         if event_type == "agent_end":
-            #logger.info(f"\nAgent finished. Event:{event}")
             return parse_assistant_response(event.get("messages", []))  
             
             
-
-
-def send_prompt_get_response(client, message, timeout: int = 5*60) -> str:
-
-    client.send_command({"id":message.chat.id,"type": "prompt", "message": message.text})
-    start_time = time.time()
-
-    for event in client.read_events():
-        if time.time() - start_time > timeout:
-            return "Error: Response timed out."
-            
-        if event.get("type") == "agent_end":
-            print("\n\nAgent finished.")
-            print(f"Stop reason: {event.get('stopReason')}")
-            print(f"messages: {event.get('messages')}")
-            return parse_assistant_response(event.get("messages", []))  
-            
-
