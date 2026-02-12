@@ -3,7 +3,7 @@
 This is a lightweight personal AI agent project with Telegram integration, built using Python and Node.js.
 
 
-Inspired by [Openclaw](https://github.com/openclaw/openclaw) and [Pi Agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent)
+Inspired by [Openclaw](https://github.com/openclaw/openclaw) and [Pi Agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent).
 
 
 ### Key Features
@@ -30,10 +30,10 @@ To get a telegram token you need to create a [Telegram Bot](https://core.telegra
 
 I personally use it with local model. Here are the env variables.
 ```
-- TELEGRAM_BOT_TOKEN = < Telegram token >
-- LLM_BASE_URL=http://localhost:1234/v1 # lmstudio server
-- LLM_MODEL_NAME=qwen/qwen3-coder-30b # really fast model and it runs in a 32GB+ Macbook pro.
-- LLM_PROVIDER=lmstudio 
+TELEGRAM_BOT_TOKEN = < Telegram token >
+LLM_BASE_URL=http://localhost:1234/v1 # lmstudio server
+LLM_MODEL_NAME=qwen/qwen3-coder-30b # really fast model and it runs in a 32GB+ Macbook pro.
+LLM_PROVIDER=lmstudio 
 ```
 
 1. Clone the repo `git clone git@github.com:makkader/slim-pa.git`
