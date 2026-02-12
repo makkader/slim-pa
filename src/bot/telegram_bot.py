@@ -1,15 +1,15 @@
-import asyncio
 import time
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
-from aiogram import F
+from aiogram.enums import ParseMode
 from src.config.config import settings
-#from src.agent.pi_rpc_client_full import CompleteRPCClient
 from src.agent.pi_rpc_client_async import CompleteRPCClient
-from src.agent.rpc_client_helper import send_prompt_get_response, send_prompt_get_response_async
+from src.agent.rpc_client_helper import send_prompt_get_response_async
 
 from loguru import logger
-from typing import Dict, Any
+import telegramify_markdown
+
+
 
 # Initialize a single RPC client instance for the bot
 def create_rpc_client():
@@ -77,8 +77,11 @@ async def message_handler(message: types.Message) -> None:
         )
         pi_client.on("message_update", on_text_delta)
         assistant_text = await send_prompt_get_response_async(pi_client, message)
+
         logger.info(f"Sending response to {chat_id}: {assistant_text}")
-        await message.answer(assistant_text)
+        converted = telegramify_markdown.markdownify(assistant_text)
+        
+        await message.answer(converted, parse_mode=ParseMode.MARKDOWN_V2)
     except Exception as e:
         logger.exception("Error processing message")
         await message.answer(f"Sorry, I encountered an error: {str(e)}")
