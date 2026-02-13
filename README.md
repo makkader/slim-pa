@@ -2,6 +2,7 @@
 
 This is a lightweight personal AI agent project with Telegram integration, built using Python and Node.js.
 
+<img src="image.png" width="400">
 
 Inspired by [Openclaw](https://github.com/openclaw/openclaw) and [Pi Agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent).
 
