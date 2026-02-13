@@ -3,7 +3,7 @@
         "lmstudio": {
             "baseUrl": "http://192.168.50.97:1234/v1",
             "api": "openai-completions",
-            "apiKey": "lmstudio",
+            "apiKey": "not-needed",
             "models": [
                 {
                     "id": "openai/gpt-oss-20b"
@@ -13,6 +13,16 @@
                 },
                 {
                     "id": "qwen/qwen3-coder-30b"
+                }
+            ]
+        },
+        "ollama": {
+            "baseUrl": "http://192.168.50.97:11434/v1",
+            "api": "openai-completions",
+            "apiKey": "not-needed",
+            "models": [
+                {
+                    "id": "qwen2.5"
                 }
             ]
         }
