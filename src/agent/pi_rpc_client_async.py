@@ -18,8 +18,7 @@ from typing import AsyncIterator, Dict, Any, Optional, List, Callable, Awaitable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-
-PROVIDER = "lmstudio"
+from loguru import logger
 
 
 class StreamingBehavior(Enum):
@@ -45,11 +44,12 @@ class CompleteRPCClient:
 
     def __init__(
         self,
-        provider: str = PROVIDER,
+        provider: str,
         model: Optional[str] = None,
         no_session: bool = False,
         session_dir: Optional[str] = None,
         additional_args: Optional[List[str]] = None,
+        tools: Optional[str] = None,
     ):
         """Initialize the RPC client configuration.
 
@@ -59,6 +59,7 @@ class CompleteRPCClient:
             no_session: Disable session persistence
             session_dir: Custom session storage directory
             additional_args: Additional command-line arguments
+            tools: Comma-separated list of tools to enable (optional)
         """
         self.cmd = ["pi", "--mode", "rpc", "--provider", provider]
         if model:
@@ -67,6 +68,8 @@ class CompleteRPCClient:
             self.cmd.append("--no-session")
         if session_dir:
             self.cmd.extend(["--session-dir", session_dir])
+        if tools:
+            self.cmd.extend(["--tools", tools])
         if additional_args:
             self.cmd.extend(additional_args)
 
@@ -79,6 +82,16 @@ class CompleteRPCClient:
         ] = {}
         self._read_task: Optional[asyncio.Task] = None
 
+    async def _watch_stderr(self):
+        try:
+            while True:
+                line = await self.proc.stderr.readline()
+                if not line:
+                    break
+                logger.error(f"STDERR: {line.decode().rstrip()}")
+        except Exception as e:
+            logger.error(f"stderr watcher crashed: {e}")
+
     async def start(self) -> None:
         """Start the agent process."""
         self.proc = await asyncio.create_subprocess_exec(
@@ -88,6 +101,7 @@ class CompleteRPCClient:
             stderr=asyncio.subprocess.PIPE,
             limit=1024 * 1024,  # 1MB buffer
         )
+        asyncio.create_task(self._watch_stderr())
 
     async def send_command(self, command: Dict[str, Any]) -> None:
         """Send a command to the agent."""

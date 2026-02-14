@@ -28,6 +28,16 @@
                     "id": "qwen2.5"
                 }
             ]
+        },
+        "nvdia": {
+            "baseUrl": "https://integrate.api.nvidia.com/v1",
+            "api": "openai-completions",
+            "apiKey": "NVDIA_API_KEY",
+            "models": [
+                {
+                    "id": "moonshotai/kimi-k2.5"
+                }
+            ]
         }
     }
 }

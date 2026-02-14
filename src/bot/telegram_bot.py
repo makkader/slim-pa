@@ -13,7 +13,10 @@ import telegramify_markdown
 # Initialize a single RPC client instance for the bot
 def create_rpc_client():
     return CompleteRPCClient(
-        provider=settings.LLM_PROVIDER, model=settings.LLM_MODEL_NAME, no_session="true"
+        provider=settings.LLM_PROVIDER,
+        model=settings.LLM_MODEL_NAME,
+        no_session="true",
+        tools="bash,read,grep,find,ls",  # limit tools
     )
 
 
@@ -78,6 +81,12 @@ async def message_handler(message: types.Message) -> None:
         assistant_text = await send_prompt_get_response_async(pi_client, message)
 
         logger.info(f"Sending response to {chat_id}: {assistant_text}")
+        if assistant_text is None:
+            await message.answer(
+                "Sorry, I couldn't generate a response. Please check log."
+            )
+            return
+
         converted = telegramify_markdown.markdownify(assistant_text)
 
         await message.answer(converted, parse_mode=ParseMode.MARKDOWN_V2)

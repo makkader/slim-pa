@@ -18,7 +18,7 @@ All scripts are executed using Node.js.
 
 Run once before first use:
 
-```bash
+```
 cd {baseDir}/web
 npm install
 ```
@@ -26,7 +26,7 @@ npm install
 
 ## Web search
 
-```bash
+```
 node {baseDir}/web-search.js <query> [--type \"web|image|video|news\"]
 ```
 
@@ -34,7 +34,7 @@ Search web using duckduckgo.
 
 ## Extract Page Content
 
-```bash
+```
 node {baseDir}/web-content.js <url>
 ```
 

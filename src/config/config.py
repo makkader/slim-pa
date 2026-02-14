@@ -6,8 +6,8 @@ load_dotenv()
 
 class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str
-    LLM_PROVIDER: str = "lmstudio"
-    LLM_MODEL_NAME: str = "qwen/qwen3-coder-30b"
+    LLM_PROVIDER: str
+    LLM_MODEL_NAME: str
     LOG_LEVEL: str = "INFO"
 
     model_config = SettingsConfigDict(
