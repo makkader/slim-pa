@@ -22,6 +22,9 @@ def parse_assistant_response(messages) -> str:
                     )
 
             total_text.append("\n".join(text_content))
+        elif message.get("role") == "toolResult":
+            content_parts = message.get("content", [])
+            logger.info(f"Tool Result: {content_parts}")
 
     return "\n".join(total_text)
 

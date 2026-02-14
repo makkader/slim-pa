@@ -86,6 +86,7 @@ class CompleteRPCClient:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            limit=1024 * 1024,  # 1MB buffer
         )
 
     async def send_command(self, command: Dict[str, Any]) -> None:

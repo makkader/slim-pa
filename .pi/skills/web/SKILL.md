@@ -1,10 +1,10 @@
 ---
-name: web-tools
+name: web
 description: A utility skill for searching the web and extracting readable content from web pages, including sites that require JavaScript to render.
 ---
 
 
-# Web Tools
+# Web
 
 This skill provides simple Node.js–based scripts for:
 - Searching the web using DuckDuckGo
@@ -19,7 +19,7 @@ All scripts are executed using Node.js.
 Run once before first use:
 
 ```bash
-cd {baseDir}/web-tools
+cd {baseDir}/web
 npm install
 ```
 
