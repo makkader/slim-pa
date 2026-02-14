@@ -20,10 +20,7 @@ Inspired by [Openclaw](https://github.com/openclaw/openclaw) and [Pi Agent](http
 
 ### Dependencies
 
-We mainly need docker. It will install all required dependencies. Following are a subset.
-- Python 3.12+ (Telegram message dispacher and Pi Agent RPC)
-- Node.js (for pi agent, skills and tools)
-
+We mainly need docker. It will install all required dependencies. 
 
 ### Setup
 
