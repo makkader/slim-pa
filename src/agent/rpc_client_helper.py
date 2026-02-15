@@ -5,7 +5,8 @@ from loguru import logger
 def parse_assistant_response(messages) -> str:
     """Parse assistant response content from OpenAI format"""
     total_text = []
-    for message in messages:
+    nmessage = len(messages)
+    for i, message in enumerate(messages):
         if message.get("role") == "assistant":
             content_parts = message.get("content", [])
 
@@ -20,8 +21,16 @@ def parse_assistant_response(messages) -> str:
                     logger.info(
                         f"Tool call detected: {tool_name} with args {tool_args}"
                     )
+            if not text_content:
+                continue
+            if message.get("stopReason") == "toolUse" and text_content:
+                total_text.append("🤔 " + "\n".join(text_content))
+            elif message.get("stopReason") == "stop" and total_text:
+                total_text.append("-" * 10 + "✅" + "-" * 10)
+                total_text.append("\n".join(text_content))
+            else:
+                total_text.append("\n".join(text_content))
 
-            total_text.append("\n".join(text_content))
         elif message.get("role") == "toolResult":
             content_parts = message.get("content", [])
             logger.info(f"Tool Result: {content_parts}")
