@@ -36,9 +36,11 @@ To get a telegram token you need to create a [Telegram Bot](https://core.telegra
 #### Example .env for Google
 
 ```
-TELEGRAM_BOT_TOKEN = < Telegram token >
+TELEGRAM_BOT_TOKEN=<Telegram token>
+GEMINI_API_KEY=<google api key>
 LLM_MODEL_NAME=gemini-3-flash-preview
 LLM_PROVIDER=google 
+
 ```
 Note: It supports many more providers such as antrhopic, openai etc. Check out full list of [providers](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/providers.md#environment-variables-or-auth-file).
 
