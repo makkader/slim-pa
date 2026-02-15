@@ -1,0 +1,18 @@
+# Node modules
+node_modules/
+
+# Chrome/Puppeteer data
+.headless-profile/
+
+# Debug files
+debug-*.png
+
+# Logs
+*.log
+
+# Build artifacts
+dist/
+build/
+
+# Environment
+.env

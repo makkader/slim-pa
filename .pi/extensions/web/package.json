@@ -1,0 +1,23 @@
+{
+  "name": "pi-web-extension",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "clean": "echo 'nothing to clean'",
+    "build": "echo 'nothing to build'",
+    "check": "echo 'nothing to check'"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "dependencies": {
+    "@navetacandra/ddg": "^0.0.8",
+    "puppeteer": "^24.37.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  }
+}
