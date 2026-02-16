@@ -14,7 +14,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { distance } from "fastest-levenshtein";
 
-const MEMORY_FILENAME = "MEMORY.MD";
+const MEMORY_FILENAME = "MEMORY.md";
 
 function getMemoryFilePath(): string {
   // Use current working directory (project root)
