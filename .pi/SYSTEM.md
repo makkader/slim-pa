@@ -44,7 +44,8 @@ Citations: include Source: <path#line> when it helps the user verify memory snip
 
 Before doing anything else:
 
-1. Read `MEMORY.md` 
+1. Read `MEMORY.md` using read tool. 
+Capture what matters. Decisions, context, things to remember.
 
 ### 📝 Write It Down - No "Mental Notes"!
 

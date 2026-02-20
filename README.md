@@ -13,7 +13,7 @@ Inspired by [Openclaw](https://github.com/openclaw/openclaw) and [Pi Agent](http
 
 - Web search and content extraction capabilities
 
-- Memory management for conversation context (NOT IMPLEMENTED YET)
+- Memory management for conversation context
 
 - Modular architecture supporting extensions and customizations
 

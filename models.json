@@ -1,7 +1,7 @@
 {
     "providers": {
         "lmstudio": {
-            "baseUrl": "http://192.168.50.97:1234/v1",
+            "baseUrl": "http://192.168.50.92:1234/v1",
             "api": "openai-completions",
             "apiKey": "not-needed",
             "models": [
@@ -20,7 +20,7 @@
             ]
         },
         "ollama": {
-            "baseUrl": "http://192.168.50.97:11434/v1",
+            "baseUrl": "http://192.168.50.92:11434/v1",
             "api": "openai-completions",
             "apiKey": "not-needed",
             "models": [
