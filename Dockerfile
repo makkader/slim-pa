@@ -33,6 +33,7 @@ COPY src/ ./src/
 COPY models.json /root/.pi/agent/models.json
 COPY AGENTS.md ./AGENTS.md
 COPY .pi/ ./.pi/
+COPY khal/config /root/.config/khal/config
 
 
 # Set environment variables

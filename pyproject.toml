@@ -10,7 +10,8 @@ dependencies = [
     "pydantic-settings",
     "ddgs",
     "loguru",
-    "telegramify_markdown"
+    "telegramify_markdown",
+    "khal==0.13.0"
 ]
 
 [build-system]
