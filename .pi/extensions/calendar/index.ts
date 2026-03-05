@@ -277,7 +277,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "calendar_add",
     label: "Add Calendar Event (khal)",
-    description: "Add an event using khal. Supports natural language dates like 'today', 'tomorrow', 'next Friday at 2pm'. Uses khal's 'new' command.",
+    description: "Add an event using khal. Supports title, datetime, location, description, and recurrence.",
     parameters: Type.Object({
       title: Type.String({ description: "Event title/summary" }),
       datetime: Type.String({
@@ -293,6 +293,12 @@ export default function (pi: ExtensionAPI) {
       ),
       description: Type.Optional(
         Type.String({ description: "Optional event description" })
+      ),
+      repeat: Type.Optional(
+        Type.String({
+          description: "Recurrence rule: daily, weekly, monthly, or yearly",
+          enum: ["daily", "weekly", "monthly", "yearly"],
+        })
       ),
       calendar: Type.Optional(
         Type.String({
@@ -323,6 +329,7 @@ export default function (pi: ExtensionAPI) {
           end_datetime,
           location,
           description,
+          repeat,
           calendar = "personal",
         } = params;
 
@@ -335,6 +342,11 @@ export default function (pi: ExtensionAPI) {
         // Build khal new command: khal new DATETIME TITLE [LOCATION]
         // Use --calendar to specify calendar
         const args = ["new", "--calendar", calendar as string];
+
+        // Add repeat if provided
+        if (repeat) {
+          args.push("--repeat", repeat as string);
+        }
 
         // Add location if provided
         if (location) {
@@ -359,6 +371,7 @@ export default function (pi: ExtensionAPI) {
 
         let output = `✅ Event added to ${calendar} calendar:\n📌 ${title}\n📅 ${datetime}`;
         if (end_datetime) output += ` - ${end_datetime}`;
+        if (repeat) output += `\n🔄 Repeats: ${repeat}`;
         if (location) output += `\n📍 ${location}`;
         if (description) output += `\n📝 ${description}`;
 
