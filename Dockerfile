@@ -27,6 +27,7 @@ RUN npm install -g @mariozechner/pi-coding-agent
 # Copy pyproject.toml and install dependencies
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-cache
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Copy the source code
 COPY src/ ./src/

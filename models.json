@@ -16,6 +16,9 @@
                 },
                 {
                     "id": "zai-org/glm-4.7-flash"
+                },
+                {
+                    "id": "qwen/qwen3.5-9b"
                 }
             ]
         },

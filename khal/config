@@ -1,6 +1,6 @@
 [calendars]
 
-[[private]]
+[[personal]]
 path = /etc/khal
 type = calendar
 
@@ -13,4 +13,4 @@ longdatetimeformat = %Y-%m-%d %I:%M %p
 
 
 [default]
-default_calendar = private
+default_calendar = personal

@@ -6,17 +6,20 @@
  * - calendar_list: List upcoming events (khal list)
  * - calendar_today: Show today's agenda (khal today)
  * - calendar_search: Search events (khal search/print)
- * - calendar_delete: Delete events
+ * - calendar_delete: Delete events (direct .ics manipulation since khal edit is interactive)
+ * - calendar_edit: Edit events (direct .ics manipulation)
  * - calendar_configure: Configure khal (khal configure)
  *
- * Requires: pip install khal
+ * Requires: pip install khal, npm install ical ical-generator
  */
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import { execSync, spawn } from "child_process";
+import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import ical from "ical";
+import icalGenerator, { ICalEvent } from "ical-generator";
 
 const CONFIG_DIR = path.join(os.homedir(), ".config", "khal");
 const CONFIG_FILE = path.join(CONFIG_DIR, "config");
@@ -39,19 +42,31 @@ function getDefaultCalendarPath(): string {
   return path.join(os.homedir(), ".calendars", "personal");
 }
 
+// Get calendar path from khal config or use default
+function getCalendarPath(calendarName: string = "personal"): string {
+  // Try to read from khal config
+  if (fs.existsSync(CONFIG_FILE)) {
+    const config = fs.readFileSync(CONFIG_FILE, "utf-8");
+    const calendarMatch = config.match(new RegExp(`\\[\\[${calendarName}\\]\\][\\s\\S]*?path\\s*=\\s*(.+)`));
+    if (calendarMatch) {
+      return calendarMatch[1].trim();
+    }
+  }
+  // Fallback to default
+  return path.join(os.homedir(), ".calendars", calendarName);
+}
+
 // Ensure khal config exists
 function ensureKhalConfig(): void {
   if (!fs.existsSync(CONFIG_DIR)) {
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
   }
-
   if (!fs.existsSync(CONFIG_FILE)) {
     const calendarPath = getDefaultCalendarPath();
     // Ensure calendar directory exists
     if (!fs.existsSync(calendarPath)) {
       fs.mkdirSync(calendarPath, { recursive: true });
     }
-
     const config = `[calendars]
 [[personal]]
 path = ${calendarPath}
@@ -73,19 +88,187 @@ function execKhal(
 ): { success: boolean; output: string; error?: string } {
   try {
     ensureKhalConfig();
-    const output = execSync(`khal ${args.join(" ")}`, {
+    const output = execSync(`khal --config ${CONFIG_FILE} ${args.join(" ")}`, {
       encoding: "utf-8",
       timeout,
-      cwd: process.cwd(),
+      //cwd: process.cwd(),
     });
     return { success: true, output: output.trim() };
   } catch (error) {
     const err = error as { stderr?: string; message?: string };
-    return {
-      success: false,
-      output: "",
-      error: err.stderr || err.message || String(error),
-    };
+    return { success: false, output: "", error: err.stderr || err.message || String(error) };
+  }
+}
+
+// Parse .ics files from a calendar directory
+function parseICalDirectory(calendarPath: string): Array<{ uid: string; event: any; filePath: string; filename: string }> {
+  const events: Array<{ uid: string; event: any; filePath: string; filename: string }> = [];
+  
+  if (!fs.existsSync(calendarPath)) {
+    return events;
+  }
+
+  const files = fs.readdirSync(calendarPath);
+  
+  for (const filename of files) {
+    if (filename.endsWith('.ics')) {
+      const filePath = path.join(calendarPath, filename);
+      try {
+        const data = ical.parseFile(filePath);
+        for (const uid in data) {
+          if (data[uid].type === 'VEVENT') {
+            events.push({
+              uid: uid,
+              event: data[uid],
+              filePath: filePath,
+              filename: filename
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse:', filePath, e);
+      }
+    }
+  }
+  
+  // Sort events by start time
+  events.sort((a, b) => a.event.start.getTime() - b.event.start.getTime());
+  
+  return events;
+}
+
+// Find event by UID or search term
+function findEvent(
+  calendarPath: string,
+  searchTerm: string
+): Array<{ uid: string; event: any; filePath: string; filename: string }> {
+  const allEvents = parseICalDirectory(calendarPath);
+  const term = searchTerm.toLowerCase();
+  
+  return allEvents.filter(({ event }) => {
+    const matchesUid = event.uid?.toLowerCase().includes(term) || false;
+    const matchesSummary = event.summary?.toLowerCase().includes(term) || false;
+    const matchesDescription = event.description?.toLowerCase().includes(term) || false;
+    return matchesUid || matchesSummary || matchesDescription;
+  });
+}
+
+// Write event to .ics file
+function writeICSFile(filePath: string, eventData: any): void {
+  const cal = icalGenerator({ name: 'Calendar' });
+  
+  const event: ICalEvent = {
+    id: eventData.uid || eventData.id || Date.now().toString(),
+    summary: eventData.summary,
+    description: eventData.description,
+    location: eventData.location,
+    start: eventData.start,
+    end: eventData.end,
+    timezone: eventData.timezone || 'local',
+    allDay: eventData.allDay || false,
+    status: eventData.status,
+  };
+  
+  cal.createEvent(event);
+  fs.writeFileSync(filePath, cal.toString());
+}
+
+// Update an event file (removing old event, adding updated)
+function updateEventFile(
+  filePath: string,
+  oldEventId: string,
+  newEventData: any
+): boolean {
+  try {
+    // Parse existing file
+    const existingEvents: any[] = [];
+    try {
+      const data = ical.parseFile(filePath);
+      for (const uid in data) {
+        if (data[uid].type === 'VEVENT' && uid !== oldEventId) {
+          existingEvents.push(data[uid]);
+        }
+      }
+    } catch (e) {
+      // File might not exist or be empty
+    }
+    
+    // Create new calendar
+    const cal = icalGenerator({ name: 'Calendar' });
+    
+    // Add existing events (except the one being updated)
+    for (const evt of existingEvents) {
+      cal.createEvent({
+        id: evt.uid,
+        summary: evt.summary,
+        description: evt.description,
+        location: evt.location,
+        start: evt.start,
+        end: evt.end || new Date(evt.start.getTime() + 3600000),
+        timezone: evt.timezone || 'local',
+        allDay: evt.allDay || false,
+      });
+    }
+    
+    // Add updated event
+    cal.createEvent({
+      id: newEventData.uid || oldEventId,
+      summary: newEventData.summary,
+      description: newEventData.description,
+      location: newEventData.location,
+      start: newEventData.start,
+      end: newEventData.end || new Date(newEventData.start.getTime() + 3600000),
+      timezone: newEventData.timezone || 'local',
+      allDay: newEventData.allDay || false,
+      status: newEventData.status,
+    });
+    
+    fs.writeFileSync(filePath, cal.toString());
+    return true;
+  } catch (error) {
+    console.error('Failed to update event file:', error);
+    return false;
+  }
+}
+
+// Remove event from file (delete event entirely)
+function removeEventFromFile(filePath: string, eventId: string): boolean {
+  try {
+    const data = ical.parseFile(filePath);
+    const remainingEvents: any[] = [];
+    
+    for (const uid in data) {
+      if (data[uid].type === 'VEVENT' && uid !== eventId) {
+        remainingEvents.push(data[uid]);
+      }
+    }
+    
+    if (remainingEvents.length === 0) {
+      // Delete file if empty
+      fs.unlinkSync(filePath);
+    } else {
+      // Rewrite file without deleted event
+      const cal = icalGenerator({ name: 'Calendar' });
+      for (const evt of remainingEvents) {
+        cal.createEvent({
+          id: evt.uid,
+          summary: evt.summary,
+          description: evt.description,
+          location: evt.location,
+          start: evt.start,
+          end: evt.end || new Date(evt.start.getTime() + 3600000),
+          timezone: evt.timezone || 'local',
+          allDay: evt.allDay || false,
+          status: evt.status,
+        });
+      }
+      fs.writeFileSync(filePath, cal.toString());
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Failed to remove event:', error);
+    return false;
   }
 }
 
@@ -94,17 +277,15 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "calendar_add",
     label: "Add Calendar Event (khal)",
-    description:
-      "Add an event using khal. Supports natural language dates like 'today', 'tomorrow', 'next Friday at 2pm'. Uses khal's 'new' command.",
+    description: "Add an event using khal. Supports natural language dates like 'today', 'tomorrow', 'next Friday at 2pm'. Uses khal's 'new' command.",
     parameters: Type.Object({
       title: Type.String({ description: "Event title/summary" }),
       datetime: Type.String({
-        description:
-          "Event date/time. Examples: 'today 14:00', 'tomorrow at 2pm', '2025-02-25 14:30', 'next Monday 10:00'",
+        description: "Event date/time in YYYY-MM-DD HH:MM AM/PM format. Examples: '2026-03-05 03:00 PM'",
       }),
       end_datetime: Type.Optional(
         Type.String({
-          description: "Optional end time (defaults to 1 hour after start)",
+          description: "Optional end date/time (defaults to 1 hour after start)",
         })
       ),
       location: Type.Optional(
@@ -120,7 +301,7 @@ export default function (pi: ExtensionAPI) {
         })
       ),
     }),
-    execute: async (_toolCallId, params) => {
+    execute: async (_toolCallId: string, params: any) => {
       const khalCheck = checkKhal();
       if (!khalCheck.installed) {
         return {
@@ -163,7 +344,6 @@ export default function (pi: ExtensionAPI) {
         }
 
         const result = execKhal(args);
-
         if (!result.success) {
           return {
             content: [
@@ -228,7 +408,7 @@ export default function (pi: ExtensionAPI) {
         })
       ),
     }),
-    execute: async (_toolCallId, params) => {
+    execute: async (_toolCallId: string, params: any) => {
       const khalCheck = checkKhal();
       if (!khalCheck.installed) {
         return {
@@ -249,20 +429,16 @@ export default function (pi: ExtensionAPI) {
         const includePast = (params.include_past as boolean) || false;
 
         const args = ["list"];
-
         if (calendar) {
           args.push("--calendar", calendar);
         }
-
         if (includePast) {
           args.push("--past");
         }
-
         // khal list shows from today by default, can specify date range
         args.push("today", `${days}d`);
 
         const result = execKhal(args);
-
         if (!result.success) {
           return {
             content: [
@@ -312,7 +488,7 @@ export default function (pi: ExtensionAPI) {
         Type.String({ description: "Specific calendar (default: all)" })
       ),
     }),
-    execute: async (_toolCallId, params) => {
+    execute: async (_toolCallId: string, params: any) => {
       const khalCheck = checkKhal();
       if (!khalCheck.installed) {
         return {
@@ -329,16 +505,14 @@ export default function (pi: ExtensionAPI) {
 
       try {
         const calendar = params.calendar as string | undefined;
-        const args = ["list", "--past"];
 
+        const args = ["list", "--past"];
         if (calendar) {
           args.push("--calendar", calendar);
         }
-
         args.push("today", "1d");
 
         const result = execKhal(args);
-
         if (!result.success) {
           return {
             content: [
@@ -389,7 +563,7 @@ export default function (pi: ExtensionAPI) {
         Type.String({ description: "Specific calendar (default: all)" })
       ),
     }),
-    execute: async (_toolCallId, params) => {
+    execute: async (_toolCallId: string, params: any) => {
       const khalCheck = checkKhal();
       if (!khalCheck.installed) {
         return {
@@ -410,17 +584,18 @@ export default function (pi: ExtensionAPI) {
 
         // khal doesn't have a direct search, so we use list + grep
         // or export and search
-        const args = ["print", "--format", "{start-loc} - {end-loc}: {title} [{location}]"];
-
+        const args = [
+          "print",
+          "--format",
+          "{start-loc} - {end-loc}: {title} [{location}]",
+        ];
         if (calendar) {
           args.push("--calendar", calendar);
         }
-
         // Print events from today to 1 year ahead
         args.push("today", "1y");
 
         const result = execKhal(args, 60000);
-
         if (!result.success) {
           return {
             content: [
@@ -435,9 +610,9 @@ export default function (pi: ExtensionAPI) {
         }
 
         // Filter results by query
-        const lines = result.output.split("\n").filter((line) =>
-          line.toLowerCase().includes(query.toLowerCase())
-        );
+        const lines = result.output
+          .split("\n")
+          .filter((line) => line.toLowerCase().includes(query.toLowerCase()));
 
         if (lines.length === 0) {
           return {
@@ -455,7 +630,9 @@ export default function (pi: ExtensionAPI) {
           content: [
             {
               type: "text",
-              text: `🔍 Search results for "${query}" (${lines.length}):\n\n${lines.join("\n")}`,
+              text: `🔍 Search results for "${query}" (${lines.length}):\n\n${lines.join(
+                "\n"
+              )}`,
             },
           ],
           details: {},
@@ -495,7 +672,7 @@ export default function (pi: ExtensionAPI) {
         Type.String({ description: "Specific calendar (default: all)" })
       ),
     }),
-    execute: async (_toolCallId, params) => {
+    execute: async (_toolCallId: string, params: any) => {
       const khalCheck = checkKhal();
       if (!khalCheck.installed) {
         return {
@@ -516,15 +693,12 @@ export default function (pi: ExtensionAPI) {
         const calendar = params.calendar as string | undefined;
 
         const args = ["agenda"];
-
         if (calendar) {
           args.push("--calendar", calendar);
         }
-
         args.push(start, `${days}d`);
 
         const result = execKhal(args);
-
         if (!result.success) {
           return {
             content: [
@@ -538,8 +712,7 @@ export default function (pi: ExtensionAPI) {
           };
         }
 
-        const output =
-          result.output || `No events found for ${start} - ${days} days.`;
+        const output = result.output || `No events found for ${start} - ${days} days.`;
 
         return {
           content: [
@@ -571,7 +744,7 @@ export default function (pi: ExtensionAPI) {
     label: "Calendar Info (khal)",
     description: "Show khal configuration and calendar information.",
     parameters: Type.Object({}),
-    execute: async (_toolCallId, _params) => {
+    execute: async (_toolCallId: string, _params: any) => {
       const khalCheck = checkKhal();
       if (!khalCheck.installed) {
         return {
@@ -603,11 +776,335 @@ export default function (pi: ExtensionAPI) {
           content: [
             {
               type: "text",
-              text: `📅 Khal Calendar Information\n${"=".repeat(30)}\n\nVersion: ${khalCheck.version}\n\nConfigured Calendars:\n${calendars}${configInfo}\n\nCalendar storage: ~/.calendars/`,
+              text: `📅 Khal Calendar Information\n${"=".repeat(
+                30
+              )}\n\nVersion: ${khalCheck.version}\n\nConfigured Calendars:\n${calendars}${configInfo}\n\nCalendar storage: ~/.calendars/`,
             },
           ],
           details: {},
         };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+          details: {},
+        };
+      }
+    },
+  });
+
+  // Register calendar_delete tool - Direct .ics manipulation
+  pi.registerTool({
+    name: "calendar_delete",
+    label: "Delete Calendar Event",
+    description: "Delete an event from the calendar using direct .ics file manipulation (since khal edit is interactive only).",
+    parameters: Type.Object({
+      event_id: Type.Optional(
+        Type.String({ description: "Event UID to delete (use search to find)" })
+      ),
+      search_term: Type.Optional(
+        Type.String({ description: "Search term to find event (if event_id not provided)" })
+      ),
+      calendar: Type.Optional(
+        Type.String({
+          description: "Calendar name (defaults to 'personal')",
+          default: "personal",
+        })
+      ),
+    }),
+    execute: async (_toolCallId: string, params: any) => {
+      try {
+        const calendar = (params.calendar as string) || "personal";
+        const eventId = params.event_id as string | undefined;
+        const searchTerm = params.search_term as string | undefined;
+
+        if (!eventId && !searchTerm) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `❌ Either event_id or search_term must be provided.`,
+              },
+            ],
+            isError: true,
+            details: {},
+          };
+        }
+
+        const calendarPath = getCalendarPath(calendar);
+        
+        if (!fs.existsSync(calendarPath)) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `❌ Calendar "${calendar}" not found at ${calendarPath}`,
+              },
+            ],
+            isError: true,
+            details: {},
+          };
+        }
+
+        // Find the event
+        let targetEvents;
+        if (eventId) {
+          targetEvents = findEvent(calendarPath, eventId);
+        } else {
+          targetEvents = findEvent(calendarPath, searchTerm!);
+        }
+
+        if (targetEvents.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No events found matching "${eventId || searchTerm}" in calendar "${calendar}".`,
+              },
+            ],
+            isError: true,
+            details: {},
+          };
+        }
+
+        if (targetEvents.length > 1) {
+          // Show multiple matches
+          const matches = targetEvents.map((e, i) => 
+            `${i + 1}. ${e.event.summary} (${e.event.start.toLocaleString()}) [UID: ${e.uid}]`
+          ).join('\n');
+          
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Multiple events found. Please use the specific event_id:\n\n${matches}`,
+              },
+            ],
+            isError: true,
+            details: {},
+          };
+        }
+
+        // Delete the single matching event
+        const eventToDelete = targetEvents[0];
+        const success = removeEventFromFile(eventToDelete.filePath, eventToDelete.uid);
+
+        if (success) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `✅ Deleted event:\n📌 ${eventToDelete.event.summary}\n📅 ${eventToDelete.event.start.toLocaleString()}\n🆔 ${eventToDelete.uid}`,
+              },
+            ],
+            details: {},
+          };
+        } else {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `❌ Failed to delete event.`,
+              },
+            ],
+            isError: true,
+            details: {},
+          };
+        }
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+          details: {},
+        };
+      }
+    },
+  });
+
+  // Register calendar_edit tool - Direct .ics manipulation
+  pi.registerTool({
+    name: "calendar_edit",
+    label: "Edit Calendar Event",
+    description: "Edit an existing calendar event using direct .ics file manipulation (since khal edit is interactive only).",
+    parameters: Type.Object({
+      event_id: Type.Optional(
+        Type.String({ description: "Event UID to edit (use search to find)" })
+      ),
+      search_term: Type.Optional(
+        Type.String({ description: "Search term to find event (if event_id not provided)" })
+      ),
+      calendar: Type.Optional(
+        Type.String({
+          description: "Calendar name (defaults to 'personal')",
+          default: "personal",
+        })
+      ),
+      new_title: Type.Optional(
+        Type.String({ description: "New event title" })
+      ),
+      new_start: Type.Optional(
+        Type.String({ description: "New start datetime (ISO format or natural language)" })
+      ),
+      new_end: Type.Optional(
+        Type.String({ description: "New end datetime (ISO format or natural language)" })
+      ),
+      new_location: Type.Optional(
+        Type.String({ description: "New location" })
+      ),
+      new_description: Type.Optional(
+        Type.String({ description: "New description" })
+      ),
+    }),
+    execute: async (_toolCallId: string, params: any) => {
+      try {
+        const calendar = (params.calendar as string) || "personal";
+        const eventId = params.event_id as string | undefined;
+        const searchTerm = params.search_term as string | undefined;
+
+        if (!eventId && !searchTerm) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `❌ Either event_id or search_term must be provided.`,
+              },
+            ],
+            isError: true,
+            details: {},
+          };
+        }
+
+        const calendarPath = getCalendarPath(calendar);
+        
+        if (!fs.existsSync(calendarPath)) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `❌ Calendar "${calendar}" not found at ${calendarPath}`,
+              },
+            ],
+            isError: true,
+            details: {},
+          };
+        }
+
+        // Find the event
+        let targetEvents;
+        if (eventId) {
+          targetEvents = findEvent(calendarPath, eventId);
+        } else {
+          targetEvents = findEvent(calendarPath, searchTerm!);
+        }
+
+        if (targetEvents.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `No events found matching "${eventId || searchTerm}" in calendar "${calendar}".`,
+              },
+            ],
+            isError: true,
+            details: {},
+          };
+        }
+
+        if (targetEvents.length > 1) {
+          // Show multiple matches
+          const matches = targetEvents.map((e, i) => 
+            `${i + 1}. ${e.event.summary} (${e.event.start.toLocaleString()}) [UID: ${e.uid}]`
+          ).join('\n');
+          
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Multiple events found. Please use the specific event_id:\n\n${matches}`,
+              },
+            ],
+            isError: true,
+            details: {},
+          };
+        }
+
+        // Edit the single matching event
+        const eventToEdit = targetEvents[0];
+        const evt = eventToEdit.event;
+
+        // Build updated event data
+        let newStart = evt.start;
+        let newEnd = evt.end;
+
+        if (params.new_start) {
+          const startDate = new Date(params.new_start as string);
+          if (!isNaN(startDate.getTime())) {
+            newStart = startDate;
+          }
+        }
+
+        if (params.new_end) {
+          const endDate = new Date(params.new_end as string);
+          if (!isNaN(endDate.getTime())) {
+            newEnd = endDate;
+          }
+        } else if (params.new_start && !params.new_end) {
+          // If only start changed, adjust end to keep same duration or default to 1 hour
+          const duration = evt.end ? evt.end.getTime() - evt.start.getTime() : 3600000;
+          newEnd = new Date(newStart.getTime() + duration);
+        }
+
+        const updatedEventData = {
+          uid: eventToEdit.uid,
+          summary: params.new_title || evt.summary,
+          description: params.new_description !== undefined ? params.new_description : evt.description,
+          location: params.new_location !== undefined ? params.new_location : evt.location,
+          start: newStart,
+          end: newEnd,
+          timezone: evt.timezone || 'local',
+          allDay: evt.allDay || false,
+        };
+
+        const success = updateEventFile(eventToEdit.filePath, eventToEdit.uid, updatedEventData);
+
+        if (success) {
+          let output = `✅ Updated event:\n📌 ${updatedEventData.summary}\n📅 ${newStart.toLocaleString()}`;
+          if (updatedEventData.end) output += ` - ${updatedEventData.end.toLocaleString()}`;
+          if (updatedEventData.location) output += `\n📍 ${updatedEventData.location}`;
+          if (updatedEventData.description) output += `\n📝 ${updatedEventData.description}`;
+          output += `\n🆔 ${eventToEdit.uid}`;
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: output,
+              },
+            ],
+            details: {},
+          };
+        } else {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `❌ Failed to update event.`,
+              },
+            ],
+            isError: true,
+            details: {},
+          };
+        }
       } catch (error) {
         return {
           content: [

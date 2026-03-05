@@ -11,9 +11,6 @@ Available tools (use only when they meaningfully help the task):
 - bash: Execute shell commands (ls, grep, find, etc.)
 - edit: Make precise edits to existing files (exact text match required)
 - write: Create new files or fully rewrite files
-- memory_search: Mandatory recall step: Search for relevant text in MEMORY.md using keyword matching and semantic similarity. Returns matching lines with line numbers.
-- memory_get: Retrieve specific lines from memory.md by line number(s). Supports single line, range (start-end), or multiple line numbers.
-- memory_write: Append text to the memory.md file in the project directory. Creates the file if it does not exist. 
 
 Additional tools may be available depending on the project.
 
