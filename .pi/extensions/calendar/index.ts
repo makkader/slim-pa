@@ -204,6 +204,9 @@ function updateEventFile(
     });
     
     fs.writeFileSync(filePath, cal.toString());
+    const parentDir = path.dirname(filePath); 
+    const now = new Date();
+    fs.utimesSync(parentDir, now, now); // Update file timestamps to trigger khal refresh
     return true;
   } catch (error) {
     console.error('Failed to update event file:', error);
@@ -406,12 +409,6 @@ export default function (pi: ExtensionAPI) {
       calendar: Type.Optional(
         Type.String({ description: "Specific calendar to query (default: all)" })
       ),
-      include_past: Type.Optional(
-        Type.Boolean({
-          description: "Include past events (default: false)",
-          default: false,
-        })
-      ),
     }),
     execute: async (_toolCallId: string, params: any) => {
       const khalCheck = checkKhal();
@@ -431,15 +428,10 @@ export default function (pi: ExtensionAPI) {
       try {
         const days = (params.days as number) || 7;
         const calendar = params.calendar as string | undefined;
-        const includePast = (params.include_past as boolean) || false;
-
         const args = ["list"];
         if (calendar) {
-          args.push("--calendar", calendar);
-        }
-        if (includePast) {
-          args.push("--past");
-        }
+          args.push("--include-calendar", calendar);
+        } 
         // khal list shows from today by default, can specify date range
         args.push("today", `${days}d`);
 
@@ -887,7 +879,7 @@ export default function (pi: ExtensionAPI) {
           location: params.new_location !== undefined ? params.new_location : evt.location,
           start: newStart,
           end: newEnd,
-          timezone: evt.timezone || 'local',
+          timezone: evt.start.tz,
           allDay: evt.allDay || false,
         };
 
