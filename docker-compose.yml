@@ -1,6 +1,8 @@
 services:
   agent-bot:
     build: .
+    environment:
+      - TZ=America/Chicago
     env_file:
       - .env
     

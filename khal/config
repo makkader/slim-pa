@@ -5,6 +5,7 @@ path = /etc/khal
 type = calendar
 
 [locale]
+local_timezone = America/Chicago
 timeformat = %I:%M %p
 dateformat = %Y-%m-%d
 longdateformat = %Y-%m-%d
