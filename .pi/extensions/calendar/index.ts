@@ -4,7 +4,6 @@
  * This extension wraps khal (https://github.com/pimutils/khal) and provides:
  * - calendar_add: Add events (khal new)
  * - calendar_list: List upcoming events (khal list)
- * - calendar_today: Show today's agenda (khal today)
  * - calendar_search: Search events (khal search/print)
  * - calendar_delete: Delete events (direct .ics manipulation since khal edit is interactive)
  * - calendar_edit: Edit events (direct .ics manipulation)
@@ -153,25 +152,6 @@ function findEvent(
   });
 }
 
-// Write event to .ics file
-function writeICSFile(filePath: string, eventData: any): void {
-  const cal = icalGenerator({ name: 'Calendar' });
-  
-  const event: ICalEvent = {
-    id: eventData.uid || eventData.id || Date.now().toString(),
-    summary: eventData.summary,
-    description: eventData.description,
-    location: eventData.location,
-    start: eventData.start,
-    end: eventData.end,
-    timezone: eventData.timezone || 'local',
-    allDay: eventData.allDay || false,
-    status: eventData.status,
-  };
-  
-  cal.createEvent(event);
-  fs.writeFileSync(filePath, cal.toString());
-}
 
 // Update an event file (removing old event, adding updated)
 function updateEventFile(
@@ -491,80 +471,6 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  // Register calendar_today tool
-  pi.registerTool({
-    name: "calendar_today",
-    label: "Today's Calendar (khal)",
-    description: "Show today's agenda using khal's list command for today.",
-    parameters: Type.Object({
-      calendar: Type.Optional(
-        Type.String({ description: "Specific calendar (default: all)" })
-      ),
-    }),
-    execute: async (_toolCallId: string, params: any) => {
-      const khalCheck = checkKhal();
-      if (!khalCheck.installed) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `❌ ${khalCheck.error}`,
-            },
-          ],
-          isError: true,
-          details: {},
-        };
-      }
-
-      try {
-        const calendar = params.calendar as string | undefined;
-
-        const args = ["list", "--past"];
-        if (calendar) {
-          args.push("--calendar", calendar);
-        }
-        args.push("today", "1d");
-
-        const result = execKhal(args);
-        if (!result.success) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `❌ Failed to get today's events: ${result.error}`,
-              },
-            ],
-            isError: true,
-            details: {},
-          };
-        }
-
-        const output = result.output || "No events scheduled for today.";
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: `📅 Today's Schedule:\n\n${output}`,
-            },
-          ],
-          details: {},
-        };
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error: ${error instanceof Error ? error.message : String(error)}`,
-            },
-          ],
-          isError: true,
-          details: {},
-        };
-      }
-    },
-  });
-
   // Register calendar_search tool
   pi.registerTool({
     name: "calendar_search",
@@ -572,9 +478,6 @@ export default function (pi: ExtensionAPI) {
     description: "Search calendar events using khal's search functionality.",
     parameters: Type.Object({
       query: Type.String({ description: "Search term to find in events" }),
-      calendar: Type.Optional(
-        Type.String({ description: "Specific calendar (default: all)" })
-      ),
     }),
     execute: async (_toolCallId: string, params: any) => {
       const khalCheck = checkKhal();
@@ -593,21 +496,12 @@ export default function (pi: ExtensionAPI) {
 
       try {
         const query = params.query as string;
-        const calendar = params.calendar as string | undefined;
 
-        // khal doesn't have a direct search, so we use list + grep
-        // or export and search
         const args = [
-          "print",
-          "--format",
-          "{start-loc} - {end-loc}: {title} [{location}]",
+          "search",
+          query
         ];
-        if (calendar) {
-          args.push("--calendar", calendar);
-        }
-        // Print events from today to 1 year ahead
-        args.push("today", "1y");
-
+        
         const result = execKhal(args, 60000);
         if (!result.success) {
           return {
@@ -622,116 +516,13 @@ export default function (pi: ExtensionAPI) {
           };
         }
 
-        // Filter results by query
-        const lines = result.output
-          .split("\n")
-          .filter((line) => line.toLowerCase().includes(query.toLowerCase()));
-
-        if (lines.length === 0) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `No events found matching "${query}".`,
-              },
-            ],
-            details: {},
-          };
-        }
+        const output = result.output || "No matching events found.";
 
         return {
           content: [
             {
               type: "text",
-              text: `🔍 Search results for "${query}" (${lines.length}):\n\n${lines.join(
-                "\n"
-              )}`,
-            },
-          ],
-          details: {},
-        };
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error: ${error instanceof Error ? error.message : String(error)}`,
-            },
-          ],
-          isError: true,
-          details: {},
-        };
-      }
-    },
-  });
-
-  // Register calendar_agenda tool
-  pi.registerTool({
-    name: "calendar_agenda",
-    label: "Calendar Agenda (khal)",
-    description: "Show calendar agenda for a specific time period using khal's agenda view.",
-    parameters: Type.Object({
-      start: Type.String({
-        description: "Start date (e.g., 'today', 'tomorrow', '2025-02-25')",
-        default: "today",
-      }),
-      days: Type.Optional(
-        Type.Number({
-          description: "Number of days to show (default: 14)",
-          default: 14,
-        })
-      ),
-      calendar: Type.Optional(
-        Type.String({ description: "Specific calendar (default: all)" })
-      ),
-    }),
-    execute: async (_toolCallId: string, params: any) => {
-      const khalCheck = checkKhal();
-      if (!khalCheck.installed) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `❌ ${khalCheck.error}`,
-            },
-          ],
-          isError: true,
-          details: {},
-        };
-      }
-
-      try {
-        const start = (params.start as string) || "today";
-        const days = (params.days as number) || 14;
-        const calendar = params.calendar as string | undefined;
-
-        const args = ["agenda"];
-        if (calendar) {
-          args.push("--calendar", calendar);
-        }
-        args.push(start, `${days}d`);
-
-        const result = execKhal(args);
-        if (!result.success) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `❌ Failed to get agenda: ${result.error}`,
-              },
-            ],
-            isError: true,
-            details: {},
-          };
-        }
-
-        const output = result.output || `No events found for ${start} - ${days} days.`;
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: `📋 Agenda from ${start} (${days} days):\n\n${output}`,
+              text: `🔍 Search results for "${query}": ${output}`,
             },
           ],
           details: {},
@@ -791,7 +582,7 @@ export default function (pi: ExtensionAPI) {
               type: "text",
               text: `📅 Khal Calendar Information\n${"=".repeat(
                 30
-              )}\n\nVersion: ${khalCheck.version}\n\nConfigured Calendars:\n${calendars}${configInfo}\n\nCalendar storage: ~/.calendars/`,
+              )}\n\nVersion: ${khalCheck.version}\n\nConfigured Calendars:\n${calendars}${configInfo}`,
             },
           ],
           details: {},
