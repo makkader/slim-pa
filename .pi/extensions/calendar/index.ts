@@ -280,6 +280,11 @@ export default function (pi: ExtensionAPI) {
           enum: ["daily", "weekly", "monthly", "yearly"],
         })
       ),
+      until: Type.Optional(
+        Type.String({
+          description: "Stop repeating on this date (YYYY-MM-DD format)",
+        })
+      ),
       calendar: Type.Optional(
         Type.String({
           description: "Calendar name (defaults to 'personal')",
@@ -287,96 +292,103 @@ export default function (pi: ExtensionAPI) {
         })
       ),
     }),
-    execute: async (_toolCallId: string, params: any) => {
-      const khalCheck = checkKhal();
-      if (!khalCheck.installed) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `❌ ${khalCheck.error}`,
-            },
-          ],
-          isError: true,
-          details: {},
-        };
-      }
-
-      try {
-        const {
-          title,
-          datetime,
-          end_datetime,
-          location,
-          description,
-          repeat,
-          calendar = "personal",
-        } = params;
-
-        // Build the datetime range string for khal
-        let timeSpec = datetime as string;
-        if (end_datetime) {
-          timeSpec = `${datetime} ${end_datetime}`;
-        }
-
-        // Build khal new command: khal new DATETIME TITLE [LOCATION]
-        // Use --calendar to specify calendar
-        const args = ["new", "--calendar", calendar as string];
-
-        // Add repeat if provided
-        if (repeat) {
-          args.push("--repeat", repeat as string);
-        }
-
-        // Add location if provided
-        if (location) {
-          args.push(timeSpec, `"${title}"`, `"${location}"`);
-        } else {
-          args.push(timeSpec, `"${title}"`);
-        }
-
-        const result = execKhal(args);
-        if (!result.success) {
+      execute: async (_toolCallId: string, params: any) => {
+        const khalCheck = checkKhal();
+        if (!khalCheck.installed) {
           return {
             content: [
               {
                 type: "text",
-                text: `❌ Failed to add event: ${result.error}`,
+                text: `❌ ${khalCheck.error}`,
               },
             ],
             isError: true,
             details: {},
           };
         }
+        try {
+          const {
+            title,
+            datetime,
+            end_datetime,
+            location,
+            description,
+            repeat,
+            until,
+            calendar = "personal",
+          } = params;
 
-        let output = `✅ Event added to ${calendar} calendar:\n📌 ${title}\n📅 ${datetime}`;
-        if (end_datetime) output += ` - ${end_datetime}`;
-        if (repeat) output += `\n🔄 Repeats: ${repeat}`;
-        if (location) output += `\n📍 ${location}`;
-        if (description) output += `\n📝 ${description}`;
+          // Build the datetime range string for khal
+          let timeSpec = datetime as string;
+          if (end_datetime) {
+            timeSpec = `${datetime} ${end_datetime}`;
+          }
 
-        return {
-          content: [
-            {
-              type: "text",
-              text: output,
-            },
-          ],
-          details: {},
-        };
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error: ${error instanceof Error ? error.message : String(error)}`,
-            },
-          ],
-          isError: true,
-          details: {},
-        };
-      }
-    },
+          // Build khal new command: khal new DATETIME TITLE [LOCATION]
+          // Use --calendar to specify calendar
+          const args = ["new", "--calendar", calendar as string];
+
+          // Add repeat if provided
+          if (repeat) {
+            args.push("--repeat", repeat as string);
+          }
+
+          // Add until if provided
+          if (until) {
+            args.push("--until", until as string);
+          }
+
+          // Add location if provided
+          if (location) {
+            args.push(timeSpec, `"${title}"`, `"${location}"`);
+          } else {
+            args.push(timeSpec, `"${title}"`);
+          }
+
+          const result = execKhal(args);
+
+          if (!result.success) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `❌ Failed to add event: ${result.error}`,
+                },
+              ],
+              isError: true,
+              details: {},
+            };
+          }
+
+          let output = `✅ Event added to ${calendar} calendar:\n📌 ${title}\n📅 ${datetime}`;
+          if (end_datetime) output += ` - ${end_datetime}`;
+          if (repeat) output += `\n🔄 Repeats: ${repeat}`;
+          if (until) output += `\n⏹️ Until: ${until}`;
+          if (location) output += `\n📍 ${location}`;
+          if (description) output += `\n📝 ${description}`;
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: output,
+              },
+            ],
+            details: {},
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+              },
+            ],
+            isError: true,
+            details: {},
+          };
+        }
+      },
   });
 
   // Register calendar_list tool
