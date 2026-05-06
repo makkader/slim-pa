@@ -11,7 +11,8 @@ dependencies = [
     "ddgs",
     "loguru",
     "telegramify_markdown",
-    "khal==0.13.0"
+    "khal==0.13.0",
+    "telegram-text-splitter>=0.1.1",
 ]
 
 [build-system]

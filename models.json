@@ -6,19 +6,23 @@
             "apiKey": "not-needed",
             "models": [
                 {
+                    "id": "qwen/qwen3.6-27b"
+                },
+                {
                     "id": "openai/gpt-oss-20b"
                 },
                 {
-                    "id": "google/gemma-3-12b"
-                },
-                {
-                    "id": "qwen/qwen3-coder-30b"
-                },
-                {
-                    "id": "zai-org/glm-4.7-flash"
-                },
-                {
                     "id": "qwen/qwen3.5-9b"
+                }
+            ]
+        },
+        "bob": {
+            "baseUrl": "http://192.168.50.92:8123/v1",
+            "api": "openai-completions",
+            "apiKey": "bob-api-key-should-not-be-shared-okay?",
+            "models": [
+                {
+                    "id": "premium"
                 }
             ]
         },

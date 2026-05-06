@@ -222,6 +222,10 @@ class CompleteRPCClient:
         """Reset the agent session (clear all messages)."""
         await self.send_command({"type": "reset"})
 
+    async def reload(self) -> None:
+        """Reload the agent."""
+        await self.send_command({"type": "reload"})
+
     # ===== Session Commands =====
     async def new_session(self) -> None:
         """Create a new session.

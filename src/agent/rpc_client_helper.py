@@ -24,10 +24,12 @@ def parse_assistant_response(messages) -> str:
             if not text_content:
                 continue
             if message.get("stopReason") == "toolUse" and text_content:
-                total_text.append("🤔 " + "\n".join(text_content))
+                # total_text.append("🤔 " + "\n".join(text_content))
+                pass
             elif message.get("stopReason") == "stop" and total_text:
-                total_text.append("-" * 10 + "✅" + "-" * 10)
-                total_text.append("\n".join(text_content))
+                # total_text.append("-" * 10 + "✅" + "-" * 10)
+                # total_text.append("\n".join(text_content))
+                pass
             else:
                 total_text.append("\n".join(text_content))
 

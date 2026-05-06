@@ -8,6 +8,7 @@ from src.agent.rpc_client_helper import send_prompt_get_response_async
 
 from loguru import logger
 import telegramify_markdown
+from telegram_text_splitter import split_markdown_into_chunks
 
 
 # Initialize a single RPC client instance for the bot
@@ -16,7 +17,7 @@ def create_rpc_client():
         provider=settings.LLM_PROVIDER,
         model=settings.LLM_MODEL_NAME,
         no_session="true",
-        tools="bash,read,grep,find,ls",  # limit tools
+        # tools="bash,read,grep,find,ls",  # limit tools
     )
 
 
@@ -30,6 +31,14 @@ async def command_start_handler(message: types.Message) -> None:
     await message.answer(
         f"Hello, {message.from_user.full_name}! I am your AI agent. How can I help you today?"
     )
+
+
+@dp.message(Command("reload"))
+async def command_reload(message: types.Message) -> None:
+    if pi_client.proc is None:
+        await pi_client.start()
+    await pi_client.reload()
+    await message.answer(f"re-loaded extensions.")
 
 
 @dp.message(Command("new"))
@@ -59,8 +68,8 @@ async def message_handler(message: types.Message) -> None:
         assistant_event = event.get("assistantMessageEvent", {})
         if assistant_event.get("type") == "text_delta":
             now = time.time()
-            if now - last_typed > 5:
-                logger.info(f"type action sent for chat_id: {chat_id} at {now}.")
+            if now - last_typed > 10:
+                # logger.info(f"type action sent for chat_id: {chat_id} at {now}.")
                 await message.bot.send_chat_action(chat_id=chat_id, action="typing")
 
                 last_typed = now
@@ -88,8 +97,16 @@ async def message_handler(message: types.Message) -> None:
             return
 
         converted = telegramify_markdown.markdownify(assistant_text)
+        ## Split the converted markdown into chunks that fit within Telegram's message limits
+        chunks = split_markdown_into_chunks(
+            converted
+        )  # Telegram's max message length is 4096 characters
 
-        await message.answer(converted, parse_mode=ParseMode.MARKDOWN_V2)
+        for i, chunk in enumerate(chunks):
+            print(f"--- Chunk {i+1} (Length: {len(chunk)}) ---")
+            print(chunk)
+            print("-" * 20)
+            await message.answer(chunk, parse_mode=ParseMode.MARKDOWN_V2)
     except Exception as e:
         logger.exception("Error processing message")
         await message.answer(f"Sorry, I encountered an error: {str(e)}")

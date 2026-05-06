@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y \
     chromium 
 
 # Install npm package
-RUN npm install -g @mariozechner/pi-coding-agent
+RUN npm install -g @mariozechner/pi-coding-agent@0.71.0
 
 # Copy pyproject.toml and install dependencies
 COPY pyproject.toml uv.lock ./
